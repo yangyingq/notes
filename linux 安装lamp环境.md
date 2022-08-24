@@ -564,3 +564,50 @@ whereis git
 git --version
 ```
 
+
+
+linux docker 安装composer
+
+```
+docker exec -it cb6c1fe83bff(php容器ID) bash #进入php容器
+
+#安装composer
+
+curl -sS https://getcomposer.org/installer | php
+ 
+mv composer.phar /usr/local/bin/composer
+ 
+#换阿里云源(可选)
+composer config -g repo.packagist composer https://mirrors.aliyun.com/composer
+ 
+exit
+
+在容器内执行composer update
+```
+
+
+
+docker 安装php-gd库扩展
+
+```
+apt update #更新软件源
+apt install -y libwebp-dev libjpeg-dev libpng-dev libfreetype6-dev #安装各种库
+docker-php-source extract #解压源码
+cd /usr/src/php/ext/gd #gd源码文件夹
+docker-php-ext-configure gd --with-webp-dir=/usr/include/webp --with-jpeg-dir=/usr/include --with-png-dir=/usr/include --with-freetype-dir=/usr/include/freetype2 #准备编译
+docker-php-ext-install gd #编译安装
+php -m | grep gd
+
+```
+
+ 
+
+
+
+mysql 8.0 修改密码
+
+```
+#由于mysql 8.0以上的密码验证方式不同，转变为传统的数据库密码验证方式
+alter user 'root'@'%' identified with mysql_native_password by 'your password';
+```
+
