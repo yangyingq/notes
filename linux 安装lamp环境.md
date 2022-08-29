@@ -3,11 +3,12 @@
 mysqldump 导数据经常使用，指定数据库，指定表，指定条件，可以这么执行
 
 ```
-mysqldump -h192.168.11.10 -uroot -pcentos  --databases clue --tables clue_outcall_tasks -t  --where='id=1' >/tmp/clue_outcall_tasks.sql
+mysqldump -h192.168.11.10 -uroot -pcentos  --databases clue --tables  –progress-report -t  --where='id=1'  >/tmp/clue_outcall_tasks.sql
 
 #参数解释：
 
 --databases 指定数据库
+-–progress-report 进度报告显示
 --tables 指定表
 --where='' 是筛选条件
 -t只导数据，不导结构
@@ -513,11 +514,30 @@ docker save -o 要保存的文件名  要保存的镜像
 启动容器
 
 ```
-docker run --name nginx -p 80:80 -v /usr/local/nginx/conf/nginx.conf:/etc/nginx/nginx.conf -v /data/wwwroot/:/etc/nginx/www/html/ -v /usr/local/nginx/conf/conf.d/:/etc/nginx/conf.d/ --link php7.2.4 --privileged=true -d nginx
+docker run --name nginx -p 80:80 -p 8090:8090 -p 8091:8091 -v /data/server/nginx/nginx.conf:/etc/nginx/nginx.conf -v /data/wwwroot/:/etc/nginx/www/html/ -v /data/server/nginx/conf.d/:/etc/nginx/conf.d/ --link php7.2.4 --privileged=true -d nginx
 
 docker run -d -p 9000:9000 --name php7.2.4 -v /data/wwwroot:/var/www/html -v /data/server/php/php.ini:/usr/local/etc/php/php.ini --privileged=true   php:7.2.4-fpm
 
 docker run -itd --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 mysql
+修改mysql 乱码
+
+查看mysql 编码：show variables like '%char%';
+
+修改mysql 容器中 /etc/mysql/mysql.cnf ,添加以下内容
+show varia
+
+[mysql]
+default-character-set=utf8
+ 
+[mysqld]
+collation-server = utf8_unicode_ci
+init-connect='SET NAMES utf8'
+character-set-server = utf8
+ 
+[client]
+default-character-set=utf8
+
+
 grant all privileges on *.* to 'root'@'%' identified by '123456' with grant option; #进入mysql 后设置远程访问
 
 -v 挂载目录 
@@ -600,10 +620,6 @@ php -m | grep gd
 
 ```
 
- 
-
-
-
 mysql 8.0 修改密码
 
 ```
@@ -611,3 +627,29 @@ mysql 8.0 修改密码
 alter user 'root'@'%' identified with mysql_native_password by 'your password';
 ```
 
+mysql.cnf 配置
+
+```
+[mysqld]
+#设置文件编码
+character-set-server=utf8mb4
+#binlog日志的基本文件名，需要注意的是启动mysql的用户需要对这个目录(/usr/local/var/mysql/binlog)有写入的权限
+log_bin=/var/lib/mysql/mysql-bin
+## 配置binlog日志的格式
+binlog_format = ROW
+## 配置 MySQL replaction 需要定义，不能和 canal 的 slaveId 重复
+server-id=123
+## 设置中继日志的路径
+relay_log=/usr/local/var/mysql/relaylog/mysql-relay
+
+[client]
+#客户端连接编码
+default-character-set=utf8mb4 
+
+[mysql]
+default-character-set=utf8mb4
+```
+
+ubantu 安装libxml2
+
+apt install lib
