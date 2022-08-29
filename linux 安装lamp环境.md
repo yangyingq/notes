@@ -653,3 +653,17 @@ default-character-set=utf8mb4
 ubantu 安装libxml2
 
 apt install lib
+
+
+
+
+
+docker 安装canal 
+
+```
+github 仓库：https://github.com/xingwenge/canal-php
+
+#启动挂载
+docker run -d -v /data/canal/conf/instance.properties:/home/admin/canal-server/conf/example/instance.properties -p 11111:11111 --name canal canal/canal-server:v1.1.5
+```
+
