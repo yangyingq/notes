@@ -478,51 +478,95 @@ sudo yum install docker-ce docker-ce-cli containerd.io
 systemctl start docker
 ```
 
-7.docker 拉取镜像
+7.镜像容器操作
 
 ```
-docker pull nginx 
-```
-
-8.容器操作
-
-移除
-
-```
+拉取镜像：docker pull 容器id 
+删除镜像：docker rmi 容器id
+保存镜像：docker save -o 要保存的文件名  要保存的镜像
+将容器提交为镜像：docker commit [OPTIONS] CONTAINER [REPOSITORY[:TAG]]
 停止容器：docker stop b628a3549580
 移除容器：docker rm b628a3549580
+查看容器挂载：docker inspect container_id | grep Mounts -A 20  
+查看容器ip：docker inspect nginx | grep IPAddress 
+查看容器运行日志：docker logs -n 20 
+复制主机文件进入容器:docker cp '源文件' 容器id:容器内文件夹
 ```
 
-查看容器挂载
+docker 部署nginx
 
 ```
-docker inspect container_id | grep Mounts -A 20
-```
 
-查看容器ip
-
-```
-docker inspect nginx | grep IPAddress
-```
-
-保存镜像
-
-```
-docker save -o 要保存的文件名  要保存的镜像
-```
-
-启动容器
-
-```
 docker run --name nginx -p 80:80 -p 8090:8090 -p 8091:8091 -v /data/server/nginx/nginx.conf:/etc/nginx/nginx.conf -v /data/wwwroot/:/etc/nginx/www/html/ -v /data/server/nginx/conf.d/:/etc/nginx/conf.d/ --link php7.2.4 --privileged=true -d nginx
 
+--link 这里网络需要连通php容器，实现nginx 将php文件转发给php服务处理。
+
+启动完之后修改nginx.conf中php转发配置
+   location ~ \.php$ {
+        fastcgi_pass   php7.2.4:9000; #转发至php容器9000端口，如果不通需要 将nginx容器 link php容器
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  /var/www/html/$fastcgi_script_name;
+        include        fastcgi_params;
+    }
+    
+进入容器后执行 nginx -s reload 可重新启动nginx
+
+```
+
+
+
+docker 部署php
+
+```
+
+docker pull php
 docker run -d -p 9000:9000 --name php7.2.4 -v /data/wwwroot:/var/www/html -v /data/server/php/php.ini:/usr/local/etc/php/php.ini --privileged=true   php:7.2.4-fpm
 
+
+-v 挂载目录 
+--privileged=true 使用该参数，container内的root拥有真正的root权限。
+否则，container内的root只是外部的一个普通用户权限。
+
+【安装composer】
+    docker exec -it cb6c1fe83bff(php容器ID) bash #进入php容器
+
+    #安装composer
+
+    curl -sS https://getcomposer.org/installer | php
+
+    mv composer.phar /usr/local/bin/composer
+
+    #换阿里云源(可选)
+    composer config -g repo.packagist composer https://mirrors.aliyun.com/composer
+
+    exit
+
+    在容器内执行composer update
+【安装composer】
+
+【docker 安装php-gd库扩展】
+    apt update #更新软件源
+    apt install -y libwebp-dev libjpeg-dev libpng-dev libfreetype6-dev #安装各种库
+    docker-php-source extract #解压源码
+    cd /usr/src/php/ext/gd #gd源码文件夹
+    docker-php-ext-configure gd --with-webp-dir=/usr/include/webp --with-jpeg-dir=/usr/include --with-png-dir=/usr/include --with-freetype-dir=/usr/include/freetype2 #准备编译
+    docker-php-ext-install gd #编译安装
+    php -m | grep gd
+【docker 安装php-gd库扩展】
+
+
+【ubantu 安装libxml2】	
+	apt install lib
+【ubantu 安装libxml2】
+```
+
+docker 部署mysql
+
+```
 docker run -itd --name mysql -p 3306:3306 -e MYSQL_ROOT_PASSWORD=123456 mysql
-修改mysql 乱码
 
+mysql 乱码问题
 查看mysql 编码：show variables like '%char%';
-
 修改mysql 容器中 /etc/mysql/mysql.cnf ,添加以下内容
 show varia
 
@@ -537,36 +581,33 @@ character-set-server = utf8
 [client]
 default-character-set=utf8
 
-
 grant all privileges on *.* to 'root'@'%' identified by '123456' with grant option; #进入mysql 后设置远程访问
 
--v 挂载目录 
---privileged=true 使用该参数，container内的root拥有真正的root权限。
-否则，container内的root只是外部的一个普通用户权限。
-进入容器后执行 nginx -s reload 可重新启动nginx
+#由于mysql 8.0以上的密码验证方式不同，转变为传统的数据库密码验证方式
+alter user 'root'@'%' identified with mysql_native_password by 'your password';
 
-启动完之后修改nginx.conf中php转发配置
-   location ~ \.php$ {
-        fastcgi_pass   php7.2.4:9000; #转发至php容器9000端口，如果不通需要 将nginx容器 link php容器
-        fastcgi_index  index.php;
-        fastcgi_param  SCRIPT_FILENAME  /var/www/html/$fastcgi_script_name;
-        include        fastcgi_params;
-    }
+【mysql.cnf 配置】
+    [mysqld]
+    #设置文件编码
+    character-set-server=utf8mb4
+    #binlog日志的基本文件名，需要注意的是启动mysql的用户需要对这个目录(/usr/local/var/mysql/binlog)有写入的权限
+    log_bin=/var/lib/mysql/mysql-bin
+    ## 配置binlog日志的格式
+    binlog_format = ROW
+    ## 配置 MySQL replaction 需要定义，不能和 canal 的 slaveId 重复
+    server-id=123
+    ## 设置中继日志的路径
+    relay_log=/usr/local/var/mysql/relaylog/mysql-relay
+
+    [client]
+    #客户端连接编码
+    default-character-set=utf8mb4 
+
+    [mysql]
+    default-character-set=utf8mb4
+【mysql.cnf 配置】
+
 ```
-
-查看容器日志
-
-```
-docker inspect --format '{{.LogPath}}' mysql || docker logs 容器id
-```
-
-复制主机文件进入容器
-
-```
-docker cp '源文件' 容器id:容器内文件夹
-```
-
-
 
 linux 部署git
 
@@ -586,84 +627,101 @@ git --version
 
 
 
-linux docker 安装composer
-
-```
-docker exec -it cb6c1fe83bff(php容器ID) bash #进入php容器
-
-#安装composer
-
-curl -sS https://getcomposer.org/installer | php
- 
-mv composer.phar /usr/local/bin/composer
- 
-#换阿里云源(可选)
-composer config -g repo.packagist composer https://mirrors.aliyun.com/composer
- 
-exit
-
-在容器内执行composer update
-```
-
-
-
-docker 安装php-gd库扩展
-
-```
-apt update #更新软件源
-apt install -y libwebp-dev libjpeg-dev libpng-dev libfreetype6-dev #安装各种库
-docker-php-source extract #解压源码
-cd /usr/src/php/ext/gd #gd源码文件夹
-docker-php-ext-configure gd --with-webp-dir=/usr/include/webp --with-jpeg-dir=/usr/include --with-png-dir=/usr/include --with-freetype-dir=/usr/include/freetype2 #准备编译
-docker-php-ext-install gd #编译安装
-php -m | grep gd
-
-```
-
-mysql 8.0 修改密码
-
-```
-#由于mysql 8.0以上的密码验证方式不同，转变为传统的数据库密码验证方式
-alter user 'root'@'%' identified with mysql_native_password by 'your password';
-```
-
-mysql.cnf 配置
-
-```
-[mysqld]
-#设置文件编码
-character-set-server=utf8mb4
-#binlog日志的基本文件名，需要注意的是启动mysql的用户需要对这个目录(/usr/local/var/mysql/binlog)有写入的权限
-log_bin=/var/lib/mysql/mysql-bin
-## 配置binlog日志的格式
-binlog_format = ROW
-## 配置 MySQL replaction 需要定义，不能和 canal 的 slaveId 重复
-server-id=123
-## 设置中继日志的路径
-relay_log=/usr/local/var/mysql/relaylog/mysql-relay
-
-[client]
-#客户端连接编码
-default-character-set=utf8mb4 
-
-[mysql]
-default-character-set=utf8mb4
-```
-
-ubantu 安装libxml2
-
-apt install lib
-
-
-
-
-
 docker 安装canal 
 
 ```
 github 仓库：https://github.com/xingwenge/canal-php
 
 #启动挂载
-docker run -d -v /data/canal/conf/instance.properties:/home/admin/canal-server/conf/example/instance.properties -p 11111:11111 --name canal canal/canal-server:v1.1.5
+docker run -d -v /data/server/canal/conf/instance.properties:/home/admin/canal-server/conf/example/instance.properties -p 11111:11111 --name canal canal/canal-server:v1.1.5
+
+手动etl(全量更新):curl http://127.0.0.1:8081/etl/hbase/mytest_person2.yml -X POST
+
+
 ```
 
+docker 安装canal-adapter
+
+```
+
+docker run --name canal-adapter -p 8081:8081 -v /mydata/canal-adapter/conf:/opt/canal-adapter/conf -d slpcat/canal-adapter:v1.1.5
+
+【canal-adapter application.yml配置】
+    server:
+      port: 8081
+    spring:
+      jackson:
+        date-format: yyyy-MM-dd HH:mm:ss
+        time-zone: GMT+8
+        default-property-inclusion: non_null
+
+    canal.conf:
+      mode: tcp #tcp kafka rocketMQ rabbitMQ
+      flatMessage: true
+      zookeeperHosts:
+      syncBatchSize: 1000
+      retries: 0
+      timeout:
+      accessKey:
+      secretKey:
+      consumerProperties:
+        # canal tcp consumer
+        canal.tcp.server.host: 192.168.182.137:11111
+        # canal.tcp.zookeeper.hosts:
+        canal.tcp.batch.size: 500
+        canal.tcp.username:
+        canal.tcp.password:
+
+      srcDataSources:
+        defaultDS:
+          url: jdbc:mysql://192.168.182.137:3306/plaform_system_jsyd_v1?useUnicode=true
+          username: root
+          password: 123456
+      canalAdapters:
+      - instance: example # canal instance Name or mq topic name
+        groups:
+          - groupId: g1
+            outerAdapters:
+            - name: logger
+            - name: es6
+              hosts: 192.168.182.137:9300 # 127.0.0.1:9200 for rest mode
+              properties:
+                # mode: transport # or rest
+                # security.auth: test:123456 #  only used for rest mode
+                cluster.name: es1
+              #     - name: rdb
+              #       key: mysql1
+              #       properties:
+              #         jdbc.driverClassName: com.mysql.jdbc.Driver
+              #         jdbc.url: jdbc:mysql://192.168.182.137:3306/platform_system_jsyd_v1?useUnicode=true
+              #         jdbc.username: root
+              #         jdbc.password: 123456
+【canal-adapter application.yml配置】
+
+
+【canal-adapter es6/test.yml配置】	
+    dataSourceKey: defaultDS
+    # outerAdapterKey: exampleKey
+    destination: example
+    groupId: g1
+    # esVersion: es6
+    esMapping:
+      _index: test
+      _type: _doc
+      _id: _id
+      # upsert: true
+    #  pk: id
+      sql: "select a.id as _id, a.name from test a"
+    #  objFields:
+    #    _labels: array:;
+      etlCondition: ""
+      commitBatch: 3000
+ 【canal-adapter es6/test.yml配置】
+```
+
+docker 运行es
+
+```
+docker pull es:tag 
+docker run --name=elastic770 -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node"
+```
