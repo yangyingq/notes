@@ -725,3 +725,7 @@ docker 运行es
 docker pull es:tag 
 docker run --name=elastic770 -p 9200:9200 -p 9300:9300 -e "discovery.type=single-node"
 ```
+
+
+
+docker run --name kibana  -p 5601:5601 -e ELASTICSEARCH_HOSTS=http://192.168.182.137:9200   -d kibana:7.7.0
